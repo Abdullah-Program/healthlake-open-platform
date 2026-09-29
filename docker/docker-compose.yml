@@ -1,0 +1,82 @@
+name: icelake-health
+
+services:
+  garage:
+    image: ${GARAGE_IMAGE:-dxflrs/garage:v2.3.0}
+    container_name: garage
+    # --single-node + --default-bucket: Garage (>= v2.3.0) auto-creates layout, bucket and access key from env
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_DEFAULT_ACCESS_KEY:?run ./run.sh init first}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY:?run ./run.sh init first}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:-healthlake}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    ports:
+      - "127.0.0.1:3900:3900"   # S3 API
+      - "127.0.0.1:3903:3903"   # admin API
+    restart: unless-stopped
+
+  polaris:
+    image: ${POLARIS_IMAGE:-apache/polaris:latest}
+    container_name: polaris
+    depends_on: [garage]
+    environment:
+      # realm,clientId,clientSecret  (in-memory metastore: catalog config is lost if this container restarts.
+      # Metadata + data files stay safe in Garage. Re-run ./run.sh catalog, or use ./run.sh up-persist)
+      POLARIS_BOOTSTRAP_CREDENTIALS: "${POLARIS_REALM:-POLARIS},${POLARIS_ROOT_CLIENT_ID:-root},${POLARIS_ROOT_CLIENT_SECRET:?run ./run.sh init first}"
+      # static S3 credentials Polaris uses to write Iceberg metadata files (Garage has no STS)
+      AWS_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY}
+      AWS_REGION: ${S3_REGION:-us-east-1}
+      # S3-compatible stores can reject the newer default AWS SDK checksum headers
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    ports:
+      - "127.0.0.1:8181:8181"   # REST catalog
+      - "127.0.0.1:8182:8182"   # admin / health
+
+  jupyter:
+    build:
+      context: ./jupyter
+    container_name: jupyter
+    depends_on: [garage, polaris]
+    working_dir: /workspace
+    env_file: ../.env
+    environment:
+      PROJECT_ROOT: /workspace
+      PYTHONPATH: /workspace/src
+      AWS_REGION: ${S3_REGION:-us-east-1}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    volumes:
+      - ..:/workspace
+      - ivy_cache:/root/.ivy2
+    ports:
+      - "127.0.0.1:8888:8888"   # JupyterLab (no token - localhost only)
+      - "127.0.0.1:4040:4040"   # Spark UI while a job runs
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--IdentityProvider.token=", "--ServerApp.password="]
+
+  trino:
+    image: ${TRINO_IMAGE:-trinodb/trino:480}
+    container_name: trino
+    depends_on: [polaris]
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+    environment:
+      POLARIS_CATALOG: ${POLARIS_CATALOG:-health}
+      ENGINEER_CREDENTIAL: ${ENGINEER_CREDENTIAL:-}
+      ANALYST_CREDENTIAL: ${ANALYST_CREDENTIAL:-}
+      GARAGE_ACCESS_KEY: ${GARAGE_DEFAULT_ACCESS_KEY}
+      GARAGE_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    ports:
+      - "127.0.0.1:8080:8080"   # Trino UI + SQL (user: any name, no password)
+
+volumes:
+  garage_meta:
+  garage_data:
+  ivy_cache:

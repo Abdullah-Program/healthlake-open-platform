@@ -1,0 +1,22 @@
+# Environment secrets
+.env
+
+# Raw generated data (regenerate via run.ps1 gen)
+data/raw/
+data/garage-meta/
+data/garage-data/
+
+# Docker generated config with secrets
+docker/garage/garage.toml
+
+# Python / Jupyter artifacts
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.ivy2/
+
+# Spark / Database temporary files
+spark-warehouse/
+metastore_db/
+derby.log
+*.log

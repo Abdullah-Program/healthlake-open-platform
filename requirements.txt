@@ -1,0 +1,18 @@
+# Core High-Speed Ingestion & Processing
+polars>=1.0.0
+pyarrow>=15.0.0
+
+# Apache Iceberg & REST Catalog
+pyiceberg[s3fs,sql-sqlite]>=0.7.1
+
+# Serverless Compute & AWS SDK
+pyspark==3.5.0
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Synthetic Clinical Data Generation
+faker>=24.0.0
+
+# Polaris REST API & Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0

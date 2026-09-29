@@ -1,0 +1,13 @@
+query,engine,cold_s,median_s,min_s
+Q1 full count,spark,0.086,0.078,0.077
+Q1 full count,trino,0.087,0.081,0.075
+Q1 full count,duckdb,0.019,0.018,0.017
+Q2 one-month filter,spark,0.085,0.083,0.073
+Q2 one-month filter,trino,0.069,0.066,0.062
+Q2 one-month filter,duckdb,0.018,0.018,0.018
+Q3 join fact+dim by state,spark,0.603,0.521,0.489
+Q3 join fact+dim by state,trino,0.512,0.404,0.334
+Q3 join fact+dim by state,duckdb,0.054,0.046,0.044
+Q4 avg BP by visit type,spark,0.297,0.259,0.253
+Q4 avg BP by visit type,trino,0.14,0.114,0.113
+Q4 avg BP by visit type,duckdb,0.029,0.021,0.02

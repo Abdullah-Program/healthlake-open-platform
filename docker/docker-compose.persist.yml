@@ -1,0 +1,48 @@
+# OPTIONAL (Phase 11): Polaris with a Postgres metastore so catalog state survives restarts.
+# Based on Polaris' own relational-JDBC guide (https://polaris.apache.org/guides/jdbc/).
+# Env var names can change between Polaris releases -> if it fails, compare with that guide.
+# Usage: ./run.sh up-persist   then   ./run.sh catalog
+services:
+  postgres:
+    image: postgres:17
+    container_name: polaris-postgres
+    environment:
+      POSTGRES_USER: polaris
+      POSTGRES_PASSWORD: polaris
+      POSTGRES_DB: POLARIS
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polaris -d POLARIS"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  polaris-bootstrap:
+    image: apache/polaris-admin-tool:latest
+    container_name: polaris-bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POLARIS_PERSISTENCE_TYPE: relational-jdbc
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/POLARIS
+      QUARKUS_DATASOURCE_USERNAME: polaris
+      QUARKUS_DATASOURCE_PASSWORD: polaris
+    command:
+      - "bootstrap"
+      - "--realm=${POLARIS_REALM:-POLARIS}"
+      - "--credential=${POLARIS_REALM:-POLARIS},${POLARIS_ROOT_CLIENT_ID:-root},${POLARIS_ROOT_CLIENT_SECRET}"
+
+  polaris:
+    depends_on:
+      polaris-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      POLARIS_PERSISTENCE_TYPE: relational-jdbc
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/POLARIS
+      QUARKUS_DATASOURCE_USERNAME: polaris
+      QUARKUS_DATASOURCE_PASSWORD: polaris
+
+volumes:
+  pg_data:
